@@ -65,11 +65,27 @@ def my_main(spark, my_dataset_dir, bike_id):
     # (4) The resVAL iterator returned by 'collect' must be printed straight away, you cannot edit it to alter its format for printing.
 
     # Type all your code here. Use as many Spark SQL operations as needed.
-    pass
+   
+    window = pyspark.sql.Window.partitionBy().orderBy(inputDF["bike_id"], inputDF["start_time"])
+    inputDF = inputDF.orderBy(inputDF["bike_id"], inputDF["start_time"]).persist()
+
+    condition = ((pyspark.sql.functions.lag(inputDF["stop_station_name"], 1).over(window) != inputDF["start_station_name"]) & (pyspark.sql.functions.lag(inputDF["bike_id"], 1).over(window) == inputDF["bike_id"]))
+
+    res = inputDF.withColumn("hasMovedStartStation", pyspark.sql.functions.when(
+        condition,
+        pyspark.sql.functions.lag(inputDF["stop_station_name"], 1).over(window)
+    )).withColumn("hasMovedStartTime", pyspark.sql.functions.when(
+        condition,
+        pyspark.sql.functions.lag(inputDF["stop_time"], 1).over(window)
+    ))
 
 
-
-
+    res = res.select("start_time", "stop_time", "start_station_name", "stop_station_name", "hasMovedStartStation", "hasMovedStartTime")\
+        .filter((res["bike_id"] == bike_id) & (res["hasMovedStartStation"] != "null"))\
+            .orderBy(res["hasMovedStartTime"])
+    
+    solutionDF = res.select(res["hasMovedStartTime"].alias("start_time"), res["hasMovedStartStation"].alias("start_station_name"), res["start_time"].alias("stop_time"), res["start_station_name"].alias("stop_station_name"))
+    
 
     # ------------------------------------------------
     # END OF YOUR CODE

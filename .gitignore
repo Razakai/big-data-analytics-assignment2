@@ -1,0 +1,7 @@
+venv
+__pycahce__
+.idea
+.vscode
+__MACOSX
+my_datasets
+.DS_Store

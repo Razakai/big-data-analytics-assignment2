@@ -65,7 +65,13 @@ def my_main(spark, my_dataset_dir, top_n_bikes):
     # (4) The resVAL iterator returned by 'collect' must be printed straight away, you cannot edit it to alter its format for printing.
 
     # Type all your code here. Use as many Spark SQL operations as needed.
-    pass
+    solutionDF = inputDF.groupBy(["bike_id"])\
+        .agg({"trip_id": "count", "trip_duration": "sum"})\
+            .withColumnRenamed("sum(trip_duration)", "totalTime")\
+                .withColumnRenamed("count(trip_id)", "numTrips")
+
+
+    solutionDF = solutionDF.select("bike_id", "totalTime", "numTrips").orderBy(solutionDF["totalTime"].desc()).limit(top_n_bikes)
 
 
 

@@ -93,9 +93,66 @@ def compute_page_rank(edges_per_node, reset_probability, max_iterations):
     # Value => The PageRank value computed for this node.
 
     # Type all your code here.
-    pass
+    numNodes = len(edges_per_node)
+    rankValue = [] # [numNodes][max_iterations]
+    nodeConections = [] # x: currentNode y: connected via edge
+
+    # set initial rank value
+    rankValue.append([1/numNodes for _ in range(numNodes)])
 
 
+    for _ in  range(max_iterations):
+        rankValue.append([0 for __ in range(numNodes)])
+
+    print(rankValue)
+
+
+    # map nodes to 2d arr
+
+    for keys, values in edges_per_node.items():
+        print(keys, values)
+        if values[0] > 0:
+            nodeConections.append(values[1])
+        else:
+            nodeConections.append([0])
+    print(nodeConections)
+
+
+
+    # begin algorithm iterations
+
+    for iteration in range(1, max_iterations+1): # iteration
+        print(f"\n\n\n\n\nIteration: {iteration}\n")
+        for node in range(numNodes): # current node
+            print(f"CurrentNode: {node}")
+            totalPointerSum = []
+            for pointerNode in nodeConections[node]: # pointer node
+                totalPointerSum.append(len(nodeConections[int(pointerNode) - 1])) # number of nodes pointer node is pointing to
+            print(f"pointer nodes sum arr: {totalPointerSum}\n")
+            
+            # Generate current iteration rank value
+            newRankValue = 0
+            #previousNodeValue = rankValue[iteration-1][node]
+
+            for idx, nodePointer in enumerate(nodeConections[node]): # issue in this loop(index issue)
+                print(f"idx: {idx} nodepointer: {nodePointer}")
+                newRankValue += rankValue[iteration-1][int(nodePointer[idx]) -1] / totalPointerSum[idx]
+                #newRankValue += previousNodeValue / num
+
+            # Set current iteration rank value
+            rankValue[iteration][node] = newRankValue
+        print(f"rank value: {rankValue}")
+
+
+    for x in rankValue:
+        totalSum = 0
+        for num in x:
+            totalSum += num
+        print(f"\n\n\n\nFinal num should be 1: {totalSum}\n\n\n\n")
+    
+    print(rankValue)
+
+            
 
 
 

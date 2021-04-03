@@ -98,61 +98,56 @@ def compute_page_rank(edges_per_node, reset_probability, max_iterations):
     nodeConections = [] # x: currentNode y: connected via edge
 
     # set initial rank value
-    rankValue.append([1/numNodes for _ in range(numNodes)])
+    rankValue.append([1 for _ in range(numNodes)])
 
 
     for _ in  range(max_iterations):
         rankValue.append([0 for __ in range(numNodes)])
 
-    print(rankValue)
+    #print(rankValue)
 
 
     # map nodes to 2d arr
 
     for keys, values in edges_per_node.items():
-        print(keys, values)
+        #print(keys, values)
         if values[0] > 0:
             nodeConections.append(values[1])
         else:
             nodeConections.append([])
-    print(nodeConections)
+    #print(nodeConections)
 
 
 
     # begin algorithm iterations
 
     for iteration in range(1, max_iterations+1): # iteration
-        print(f"\n\n\n\n\nIteration: {iteration}\n")
+        #print(f"\n\n\n\n\nIteration: {iteration}\n")
         for node in range(numNodes): # current node
-            print(f"CurrentNode: {node}")
+            #print(f"CurrentNode: {node}")
             totalPointerSum = []
             for pointerNode in nodeConections[node]: # pointer node
                 totalPointerSum.append(len(nodeConections[int(pointerNode) - 1])) # number of nodes pointer node is pointing to
-            print(f"pointer nodes sum arr: {totalPointerSum}\n")
+            #print(f"pointer nodes sum arr: {totalPointerSum}\n")
             
             # Generate current iteration rank value
             newRankValue = 0
 
             for idx, nodePointer in enumerate(nodeConections[node]):
-                print(f"idx: {idx} nodepointer: {nodePointer}")
+                #print(f"idx: {idx} nodepointer: {nodePointer}")
                 newRankValue += rankValue[iteration-1][int(nodePointer) -1] / totalPointerSum[idx]
 
-            # Set current iteration rank value
-            rankValue[iteration][node] = newRankValue
+            # Set current iteration rank value, also implement dampening factor
+            rankValue[iteration][node] = (reset_probability) + ((1-reset_probability) * newRankValue)
 
 
-    for x in rankValue:
-        totalSum = 0
-        for num in x:
-            totalSum += num
-        print(f"\n\n\n\nFinal num should be 1: {totalSum}\n\n\n\n")
-    
-    print(rankValue)
+    res = {}
 
-            
+    for idx, num in enumerate(rankValue[-1]):
+        res[idx+1] = round(num, 2)
 
-
-
+    res = {key: value for key, value in sorted(res.items(), key=lambda item: item[1], reverse=True)}
+    print(res)
 
     # ------------------------------------------------
     # END OF YOUR CODE

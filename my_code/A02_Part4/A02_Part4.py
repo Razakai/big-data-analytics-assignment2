@@ -147,7 +147,9 @@ def compute_page_rank(edges_per_node, reset_probability, max_iterations):
         res[idx+1] = round(num, 2)
 
     res = {key: value for key, value in sorted(res.items(), key=lambda item: item[1], reverse=True)}
-    print(res)
+    
+    for key, value in res.items():
+        print(f"id={key}; pagerank={value}")
 
     # ------------------------------------------------
     # END OF YOUR CODE

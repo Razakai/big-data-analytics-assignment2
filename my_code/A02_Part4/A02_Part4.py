@@ -114,7 +114,7 @@ def compute_page_rank(edges_per_node, reset_probability, max_iterations):
         if values[0] > 0:
             nodeConections.append(values[1])
         else:
-            nodeConections.append([0])
+            nodeConections.append([])
     print(nodeConections)
 
 
@@ -132,16 +132,13 @@ def compute_page_rank(edges_per_node, reset_probability, max_iterations):
             
             # Generate current iteration rank value
             newRankValue = 0
-            #previousNodeValue = rankValue[iteration-1][node]
 
-            for idx, nodePointer in enumerate(nodeConections[node]): # issue in this loop(index issue)
+            for idx, nodePointer in enumerate(nodeConections[node]):
                 print(f"idx: {idx} nodepointer: {nodePointer}")
-                newRankValue += rankValue[iteration-1][int(nodePointer[idx]) -1] / totalPointerSum[idx]
-                #newRankValue += previousNodeValue / num
+                newRankValue += rankValue[iteration-1][int(nodePointer) -1] / totalPointerSum[idx]
 
             # Set current iteration rank value
             rankValue[iteration][node] = newRankValue
-        print(f"rank value: {rankValue}")
 
 
     for x in rankValue:

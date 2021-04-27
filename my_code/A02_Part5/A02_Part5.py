@@ -21,6 +21,7 @@
 # ------------------------------------------
 import pyspark
 import pyspark.sql.functions
+from pyspark.sql.functions import when
 
 # ------------------------------------------
 # FUNCTION my_main
@@ -52,7 +53,22 @@ def my_main(spark, my_dataset_dir, source_node):
     # (4) The resVAL iterator returned by 'collect' must be printed straight away, you cannot edit it to alter its format for printing.
 
     # Type all your code here. Use as many Spark SQL operations as needed.
-    pass
+    inputDF.show()
+    # make sure all edge values are positive
+    assert(inputDF.filter(inputDF.source > 0).count() > 0)
+    print(source_node)
+
+    # create path dataframe to store cost and pat to nodes
+    pathDF = inputDF.select(inputDF.source).distinct()\
+        .withColumn("cost", when(inputDF.source == source_node, 0)
+                            .otherwise(-1))\
+                                .withColumn("path", when(inputDF.source == source_node, str(source_node))
+                                                    .otherwise(""))\
+                                                        .orderBy(inputDF.source)
+    
+    # initial edge candidates
+    edgeCandidatesDF = inputDF.filter(inputDF.source == source_node)
+    edgeCandidatesDF.show()
 
 
 
@@ -63,9 +79,9 @@ def my_main(spark, my_dataset_dir, source_node):
     # ------------------------------------------------
 
     # Operation A1: 'collect' to get all results
-    resVAL = solutionDF.collect()
+    '''resVAL = solutionDF.collect()
     for item in resVAL:
-        print(item)
+        print(item)'''
 
 # --------------------------------------------------------
 #

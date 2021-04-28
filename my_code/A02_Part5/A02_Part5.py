@@ -111,7 +111,9 @@ def my_main(spark, my_dataset_dir, source_node):
 
         # update pathDF
         unionPathDF = unionPathDF.withColumn("path", when(unionPathDF.source == unionPathDF.candidate_target, concat_ws("-", unionPathDF.candidate_path, unionPathDF.source))
-                                                    .otherwise(unionPathDF.path))
+                                                    .otherwise(unionPathDF.path))\
+                                .withColumn("cost", when(unionPathDF.source == unionPathDF.candidate_target, unionPathDF.candidate_cost)
+                                                    .otherwise(unionPathDF.cost))
 
         pathDF = unionPathDF.select(unionPathDF.source, unionPathDF.cost, unionPathDF.path)
         pathDF.show()

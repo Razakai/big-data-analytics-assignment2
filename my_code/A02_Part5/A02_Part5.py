@@ -59,13 +59,12 @@ def my_main(spark, my_dataset_dir, source_node):
     # Type all your code here. Use as many Spark SQL operations as needed.
 
     def getBestCandidate(pathDF, edgeCandidatesDF):
-        # edgeCandidatesDF.show()
-        # pathDF.show()
-        sourceNode = pathDF.select(pathDF["source"].alias(
-            "sourceNode"), pathDF.cost, pathDF.path).where(pathDF.source == source_node)
-        #sourceNode.show()
 
-        # union all edge candidates with current source node cost
+        sourceNode = pathDF.select(pathDF["source"].alias(
+            "sourceNode"), pathDF.cost, pathDF.path) #.where(pathDF.source == source_node)
+       
+
+        # join all edge candidates with current source node cost
         joinCostDF = edgeCandidatesDF.join(sourceNode,
                                            edgeCandidatesDF.source == sourceNode.sourceNode, "inner")
 
@@ -76,12 +75,9 @@ def my_main(spark, my_dataset_dir, source_node):
         bestCostDF = bestCostDF.select(bestCostDF["source"].alias("candidate_source"), bestCostDF["target"].alias("candidate_target"), bestCostDF["cost"].alias("candidate_cost"), bestCostDF["path"].alias("candidate_path"))\
             .orderBy(bestCostDF.cost, ascending=True)\
             .limit(1)
-        bestCostDF.show()
+       
         return bestCostDF
 
-
-
-    inputDF.show()
 
     # make sure all edge values are positive
     assert(inputDF.filter(inputDF.source > 0).count() > 0)
@@ -96,18 +92,21 @@ def my_main(spark, my_dataset_dir, source_node):
         .orderBy(inputDF.source)\
         .persist()
 
-    pathDF.show()
+   
     # initial edge candidates
     edgeCandidatesDF = inputDF.filter(inputDF.source == source_node).persist()
+    edgeCandidatesDF.show()
 
     while edgeCandidatesDF.count() > 0:
         bestCandidate = getBestCandidate(pathDF, edgeCandidatesDF)
+        print("best candidate:")
+        bestCandidate.show()
 
         # --------update pathDF--------
         # union bestCandidate with pathDF
         unionPathDF = pathDF.join(bestCandidate,
                     pathDF.source == bestCandidate.candidate_target, "full")
-        unionPathDF.show()
+        #unionPathDF.show()
 
         # update pathDF
         unionPathDF = unionPathDF.withColumn("path", when(unionPathDF.source == unionPathDF.candidate_target, concat_ws("-", unionPathDF.candidate_path, unionPathDF.source))
@@ -115,19 +114,69 @@ def my_main(spark, my_dataset_dir, source_node):
                                 .withColumn("cost", when(unionPathDF.source == unionPathDF.candidate_target, unionPathDF.candidate_cost)
                                                     .otherwise(unionPathDF.cost))
 
-        pathDF = unionPathDF.select(unionPathDF.source, unionPathDF.cost, unionPathDF.path)
+        pathDF = unionPathDF.select(unionPathDF.source, unionPathDF.cost, unionPathDF.path).persist()
+        print("updated pathDF:")
         pathDF.show()
 
-        break
+                                                # -------update edgeCandidatesDF-------
+        # union edgeCandidatesDF
+        unionEdgeCandidates = edgeCandidatesDF.join(bestCandidate,
+                            edgeCandidatesDF.source == bestCandidate.candidate_source, "full")
+
+        unionEdgeCandidates = unionEdgeCandidates.na.fill("")\
+            .na.fill(-5)
+        unionEdgeCandidates.show()
+        # removed used candidate
+        unionEdgeCandidates = unionEdgeCandidates.filter(unionEdgeCandidates.target != unionEdgeCandidates.candidate_target)\
+            .select(unionEdgeCandidates["source"].alias("Edge_source"), unionEdgeCandidates["target"].alias("Edge_target"), unionEdgeCandidates["weight"].alias("Edge_weight"))
+
+        # remove candidates whose targets already have shortest path
+        usableCandidates = unionEdgeCandidates.join(pathDF,
+                                        unionEdgeCandidates.Edge_target == pathDF.source, "inner")
+        edgeCandidatesDF = usableCandidates.filter(usableCandidates.cost == -1)\
+            .select(usableCandidates["Edge_source"].alias("source"), usableCandidates["Edge_target"].alias("target"), usableCandidates["Edge_weight"].alias("weight"))
+        print("removed egde candidates list:")
+        edgeCandidatesDF.show()
+
+
+
+                                                # -------new candidates---------
+        unionCandidatesDF = inputDF.join(bestCandidate,
+                                    inputDF.source == bestCandidate.candidate_target, "full")
+  
+
+        # filter out already used candidates
+        unionCandidatesDF = unionCandidatesDF.filter(unionCandidatesDF.source == unionCandidatesDF.candidate_target)\
+            .select(unionCandidatesDF["source"].alias("potential_source"), unionCandidatesDF["target"].alias("potential_target"), unionCandidatesDF["weight"].alias("potential_weight"))
+        
+        # ensure that potential candidates do not already have shortest path
+        unionCandidatesAndPathDF = pathDF.join(unionCandidatesDF,
+                                    pathDF.source == unionCandidatesDF.potential_target)
+        
+        unionCandidatesAndPathDF = unionCandidatesAndPathDF.filter(unionCandidatesAndPathDF.cost == -1)\
+            .select(unionCandidatesAndPathDF["potential_source"].alias("source"),
+                    unionCandidatesAndPathDF["potential_target"].alias("target"),
+                    unionCandidatesAndPathDF["potential_weight"].alias("weight"))
+
+        # update candidates
+        edgeCandidatesDF = edgeCandidatesDF.union(unionCandidatesAndPathDF).persist()
+
+        
+
+    pathDF.show()
+    solutionDF = pathDF.select(pathDF["source"].alias("id"), pathDF["cost"], pathDF["path"]).orderBy(pathDF["cost"], ascending=True)
+
+
+    
 
     # ------------------------------------------------
     # END OF YOUR CODE
     # ------------------------------------------------
 
     # Operation A1: 'collect' to get all results
-    '''resVAL = solutionDF.collect()
+    resVAL = solutionDF.collect()
     for item in resVAL:
-        print(item)'''
+        print(item)
 
 
 # --------------------------------------------------------

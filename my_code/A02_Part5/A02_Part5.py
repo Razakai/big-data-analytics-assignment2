@@ -21,17 +21,21 @@
 # ------------------------------------------
 import pyspark
 import pyspark.sql.functions
-from pyspark.sql.functions import when
+from pyspark.sql.functions import when, concat_ws
 
 # ------------------------------------------
 # FUNCTION my_main
 # ------------------------------------------
+
+
 def my_main(spark, my_dataset_dir, source_node):
     # 1. We define the Schema of our DF.
     my_schema = pyspark.sql.types.StructType(
         [pyspark.sql.types.StructField("source", pyspark.sql.types.IntegerType(), False),
-         pyspark.sql.types.StructField("target", pyspark.sql.types.IntegerType(), False),
-         pyspark.sql.types.StructField("weight", pyspark.sql.types.IntegerType(), False)
+         pyspark.sql.types.StructField(
+             "target", pyspark.sql.types.IntegerType(), False),
+         pyspark.sql.types.StructField(
+             "weight", pyspark.sql.types.IntegerType(), False)
          ])
 
     # 2. Operation C1: 'read' to create the DataFrame from the dataset and the schema
@@ -53,26 +57,66 @@ def my_main(spark, my_dataset_dir, source_node):
     # (4) The resVAL iterator returned by 'collect' must be printed straight away, you cannot edit it to alter its format for printing.
 
     # Type all your code here. Use as many Spark SQL operations as needed.
+
+    def getBestCandidate(pathDF, edgeCandidatesDF):
+        # edgeCandidatesDF.show()
+        # pathDF.show()
+        sourceNode = pathDF.select(pathDF["source"].alias(
+            "sourceNode"), pathDF.cost, pathDF.path).where(pathDF.source == source_node)
+        #sourceNode.show()
+
+        # union all edge candidates with current source node cost
+        joinCostDF = edgeCandidatesDF.join(sourceNode,
+                                           edgeCandidatesDF.source == sourceNode.sourceNode, "inner")
+
+        # getting Best Candidate (path with lowest cost)
+        bestCostDF = joinCostDF.withColumn(
+            "cost", joinCostDF.cost + joinCostDF.weight)
+
+        bestCostDF = bestCostDF.select(bestCostDF["source"].alias("candidate_source"), bestCostDF["target"].alias("candidate_target"), bestCostDF["cost"].alias("candidate_cost"), bestCostDF["path"].alias("candidate_path"))\
+            .orderBy(bestCostDF.cost, ascending=True)\
+            .limit(1)
+        bestCostDF.show()
+        return bestCostDF
+
+
+
     inputDF.show()
+
     # make sure all edge values are positive
     assert(inputDF.filter(inputDF.source > 0).count() > 0)
-    print(source_node)
+    
 
-    # create path dataframe to store cost and pat to nodes
+    # create path dataframe to store cost and path to nodes
     pathDF = inputDF.select(inputDF.source).distinct()\
         .withColumn("cost", when(inputDF.source == source_node, 0)
-                            .otherwise(-1))\
-                                .withColumn("path", when(inputDF.source == source_node, str(source_node))
-                                                    .otherwise(""))\
-                                                        .orderBy(inputDF.source)
-    
+                    .otherwise(-1))\
+        .withColumn("path", when(inputDF.source == source_node, str(source_node))
+                    .otherwise(""))\
+        .orderBy(inputDF.source)\
+        .persist()
+
+    pathDF.show()
     # initial edge candidates
-    edgeCandidatesDF = inputDF.filter(inputDF.source == source_node)
-    edgeCandidatesDF.show()
+    edgeCandidatesDF = inputDF.filter(inputDF.source == source_node).persist()
 
+    while edgeCandidatesDF.count() > 0:
+        bestCandidate = getBestCandidate(pathDF, edgeCandidatesDF)
 
+        # --------update pathDF--------
+        # union bestCandidate with pathDF
+        unionPathDF = pathDF.join(bestCandidate,
+                    pathDF.source == bestCandidate.candidate_target, "full")
+        unionPathDF.show()
 
+        # update pathDF
+        unionPathDF = unionPathDF.withColumn("path", when(unionPathDF.source == unionPathDF.candidate_target, concat_ws("-", unionPathDF.candidate_path, unionPathDF.source))
+                                                    .otherwise(unionPathDF.path))
 
+        pathDF = unionPathDF.select(unionPathDF.source, unionPathDF.cost, unionPathDF.path)
+        pathDF.show()
+
+        break
 
     # ------------------------------------------------
     # END OF YOUR CODE
@@ -82,6 +126,7 @@ def my_main(spark, my_dataset_dir, source_node):
     '''resVAL = solutionDF.collect()
     for item in resVAL:
         print(item)'''
+
 
 # --------------------------------------------------------
 #

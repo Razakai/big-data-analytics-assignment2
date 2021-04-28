@@ -61,7 +61,7 @@ def my_main(spark, my_dataset_dir, source_node):
     def getBestCandidate(pathDF, edgeCandidatesDF):
 
         sourceNode = pathDF.select(pathDF["source"].alias(
-            "sourceNode"), pathDF.cost, pathDF.path) #.where(pathDF.source == source_node)
+            "sourceNode"), pathDF.cost, pathDF.path)
        
 
         # join all edge candidates with current source node cost
@@ -89,85 +89,74 @@ def my_main(spark, my_dataset_dir, source_node):
                     .otherwise(-1))\
         .withColumn("path", when(inputDF.source == source_node, str(source_node))
                     .otherwise(""))\
-        .orderBy(inputDF.source)\
         .persist()
 
    
     # initial edge candidates
     edgeCandidatesDF = inputDF.filter(inputDF.source == source_node).persist()
-    edgeCandidatesDF.show()
 
     while edgeCandidatesDF.count() > 0:
         bestCandidate = getBestCandidate(pathDF, edgeCandidatesDF)
-        print("best candidate:")
-        bestCandidate.show()
 
-        # --------update pathDF--------
+                                                # --------update pathDF--------
         # union bestCandidate with pathDF
-        unionPathDF = pathDF.join(bestCandidate,
+        joinPathDF = pathDF.join(bestCandidate,
                     pathDF.source == bestCandidate.candidate_target, "full")
-        #unionPathDF.show()
+
 
         # update pathDF
-        unionPathDF = unionPathDF.withColumn("path", when(unionPathDF.source == unionPathDF.candidate_target, concat_ws("-", unionPathDF.candidate_path, unionPathDF.source))
-                                                    .otherwise(unionPathDF.path))\
-                                .withColumn("cost", when(unionPathDF.source == unionPathDF.candidate_target, unionPathDF.candidate_cost)
-                                                    .otherwise(unionPathDF.cost))
+        joinPathDF = joinPathDF.withColumn("path", when(joinPathDF.source == joinPathDF.candidate_target, concat_ws("-", joinPathDF.candidate_path, joinPathDF.source))
+                                                    .otherwise(joinPathDF.path))\
+                                .withColumn("cost", when(joinPathDF.source == joinPathDF.candidate_target, joinPathDF.candidate_cost)
+                                                    .otherwise(joinPathDF.cost))
 
-        pathDF = unionPathDF.select(unionPathDF.source, unionPathDF.cost, unionPathDF.path).persist()
-        print("updated pathDF:")
-        pathDF.show()
+        pathDF = joinPathDF.select(joinPathDF.source, joinPathDF.cost, joinPathDF.path)
+
 
                                                 # -------update edgeCandidatesDF-------
         # union edgeCandidatesDF
-        unionEdgeCandidates = edgeCandidatesDF.join(bestCandidate,
+        joinEdgeCandidates = edgeCandidatesDF.join(bestCandidate,
                             edgeCandidatesDF.source == bestCandidate.candidate_source, "full")
 
-        unionEdgeCandidates = unionEdgeCandidates.na.fill("")\
+        # fill null values
+        joinEdgeCandidates = joinEdgeCandidates.na.fill("")\
             .na.fill(-5)
-        unionEdgeCandidates.show()
+        
         # removed used candidate
-        unionEdgeCandidates = unionEdgeCandidates.filter(unionEdgeCandidates.target != unionEdgeCandidates.candidate_target)\
-            .select(unionEdgeCandidates["source"].alias("Edge_source"), unionEdgeCandidates["target"].alias("Edge_target"), unionEdgeCandidates["weight"].alias("Edge_weight"))
+        joinEdgeCandidates = joinEdgeCandidates.filter(joinEdgeCandidates.target != joinEdgeCandidates.candidate_target)\
+            .select(joinEdgeCandidates["source"].alias("Edge_source"), joinEdgeCandidates["target"].alias("Edge_target"), joinEdgeCandidates["weight"].alias("Edge_weight"))
 
-        # remove candidates whose targets already have shortest path
-        usableCandidates = unionEdgeCandidates.join(pathDF,
-                                        unionEdgeCandidates.Edge_target == pathDF.source, "inner")
+        # remove current candidates whose targets already have shortest path
+        usableCandidates = joinEdgeCandidates.join(pathDF,
+                                        joinEdgeCandidates.Edge_target == pathDF.source, "inner")
         edgeCandidatesDF = usableCandidates.filter(usableCandidates.cost == -1)\
             .select(usableCandidates["Edge_source"].alias("source"), usableCandidates["Edge_target"].alias("target"), usableCandidates["Edge_weight"].alias("weight"))
-        print("removed egde candidates list:")
-        edgeCandidatesDF.show()
-
 
 
                                                 # -------new candidates---------
-        unionCandidatesDF = inputDF.join(bestCandidate,
+        joinCandidatesDF = inputDF.join(bestCandidate,
                                     inputDF.source == bestCandidate.candidate_target, "full")
   
 
         # filter out already used candidates
-        unionCandidatesDF = unionCandidatesDF.filter(unionCandidatesDF.source == unionCandidatesDF.candidate_target)\
-            .select(unionCandidatesDF["source"].alias("potential_source"), unionCandidatesDF["target"].alias("potential_target"), unionCandidatesDF["weight"].alias("potential_weight"))
+        joinCandidatesDF = joinCandidatesDF.filter(joinCandidatesDF.source == joinCandidatesDF.candidate_target)\
+            .select(joinCandidatesDF["source"].alias("potential_source"), joinCandidatesDF["target"].alias("potential_target"), joinCandidatesDF["weight"].alias("potential_weight"))
         
         # ensure that potential candidates do not already have shortest path
-        unionCandidatesAndPathDF = pathDF.join(unionCandidatesDF,
-                                    pathDF.source == unionCandidatesDF.potential_target)
+        joinCandidatesAndPathDF = pathDF.join(joinCandidatesDF,
+                                    pathDF.source == joinCandidatesDF.potential_target)
         
-        unionCandidatesAndPathDF = unionCandidatesAndPathDF.filter(unionCandidatesAndPathDF.cost == -1)\
-            .select(unionCandidatesAndPathDF["potential_source"].alias("source"),
-                    unionCandidatesAndPathDF["potential_target"].alias("target"),
-                    unionCandidatesAndPathDF["potential_weight"].alias("weight"))
+        joinCandidatesAndPathDF = joinCandidatesAndPathDF.filter(joinCandidatesAndPathDF.cost == -1)\
+            .select(joinCandidatesAndPathDF["potential_source"].alias("source"),
+                    joinCandidatesAndPathDF["potential_target"].alias("target"),
+                    joinCandidatesAndPathDF["potential_weight"].alias("weight"))
 
         # update candidates
-        edgeCandidatesDF = edgeCandidatesDF.union(unionCandidatesAndPathDF).persist()
-
-        
-
-    pathDF.show()
-    solutionDF = pathDF.select(pathDF["source"].alias("id"), pathDF["cost"], pathDF["path"]).orderBy(pathDF["cost"], ascending=True)
+        edgeCandidatesDF = edgeCandidatesDF.union(joinCandidatesAndPathDF)
 
 
-    
+    solutionDF = pathDF.select(pathDF["source"].alias("id"), pathDF["cost"], pathDF["path"])\
+        .orderBy(pathDF["source"], ascending=True)
 
     # ------------------------------------------------
     # END OF YOUR CODE
